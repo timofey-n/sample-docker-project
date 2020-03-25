@@ -1,0 +1,7 @@
+sample_index:
+    path: /
+    controller: App\Controller\SampleController::index
+
+sample_fs:
+    path: /fs
+    controller: App\Controller\SampleController::sampleFilesystem
