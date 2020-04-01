@@ -1,6 +1,65 @@
+## INSTALL DOCKER AND DOCKER COMPOSE:
+# @link https://docs.docker.com/install/linux/docker-ce/ubuntu/
+# @link https://docs.docker.com/compose/install/
+
+# To run this config file with docker-compose, "execute: docker-compose --compatibility up"
+# TODO: more customizations such as services for executing unit-tests, ability to modify php.ini files and so on.
+# TODO: investigate how we can merge .env variables to other variable (currently working very strange)
+# TODO: investigate how we can use different dev/prod environments.
 version: '3.1'
 
 services:
+    # this server configures php-fpm container before fpm service starts.
+    # Also, there is Dockerfile in project root, which contains instructions for image build.
+    # Modify Dockerfile if you want to: change original image, install missing packages or php extensions.
+    config_app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: app
+        volumes:
+            - ./:/app
+        # this commands will be executed on each container start.
+        command: >
+            /bin/sh -c "
+                cd /app &&
+                composer install &&
+                php /app/bin/console cache:clear &&
+                php /app/bin/console doctrine:migrations:migrate --allow-no-migration --no-interaction
+            "
+        env_file:
+            - ./.env
+    php7.2:
+        image: app
+        container_name: php-fpm7.2
+        volumes:
+            - ./:/app
+            - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
+        restart: always
+        user: 1000:1000
+        depends_on:
+            - config_app
+            - mysql
+        env_file:
+            - ./.env
+
+    # Mysql configuration is in .env file.
+    # TODO: mount some real directory and schedule periodic database backups in cron.
+    mysql:
+        container_name: mysql
+        image: mysql:5.7
+        volumes:
+            - database:/var/lib/mysql
+        restart: always
+        ports:
+            - 3307:3306
+        env_file:
+          - ./.env
+        deploy:
+            restart_policy:
+                condition: on-failure
+
+    # Web server service. You can use it directly or proxy connections from your main web server to this service.
     nginx:
         container_name: nginx
         image: nginx:alpine
@@ -9,35 +68,13 @@ services:
             - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
             - ./docker/nginx/conf.d:/etc/nginx/conf.d
             - ./docker/log:/var/log
-            - ./docker/run/php:/var/run/php
         ports:
             - 8080:80
         restart: always
         depends_on:
             - php7.2
             - mysql
-    php7.2:
-        container_name: php-fpm7.2
-        image: php:7.2.29-fpm-alpine
-        volumes:
-            - ./:/app
-            - ./docker/log:/var/log
-            - ./docker/run/php:/var/run/php
-            - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
-        restart: always
-        depends_on:
-            - mysql
-    mysql:
-        container_name: mysql
-        image: mysql:5.7
-        volumes:
-            - ./docker/mysql:/var/lib/mysql
-            - ./docker/log:/var/log
-        restart: always
-        ports:
-            - 3307:3306
-        environment:
-            MYSQL_ROOT_PASSWORD: 'thispasswordisnotsecuresochangeit'
 
-#volumes:
-#  app: {}
+volumes:
+    # internal docker volume (note: to delete all volumes you need to execure this command: docker-compose down -v)
+    database:
