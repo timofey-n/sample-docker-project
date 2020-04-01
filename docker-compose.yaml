@@ -12,7 +12,7 @@ services:
     # this server configures php-fpm container before fpm service starts.
     # Also, there is Dockerfile in project root, which contains instructions for image build.
     # Modify Dockerfile if you want to: change original image, install missing packages or php extensions.
-    config_app:
+    config-app:
         build:
             context: .
             dockerfile: Dockerfile
@@ -27,19 +27,20 @@ services:
                 php /app/bin/console cache:clear &&
                 php /app/bin/console doctrine:migrations:migrate --allow-no-migration --no-interaction
             "
+        depends_on:
+            - mysql
         env_file:
             - ./.env
-    php7.2:
+    php-fpm:
         image: app
-        container_name: php-fpm7.2
+        container_name: php-fpm
         volumes:
             - ./:/app
             - ./docker/php/www.conf:/usr/local/etc/php-fpm.d/www.conf
         restart: always
         user: 1000:1000
         depends_on:
-            - config_app
-            - mysql
+            - config-app
         env_file:
             - ./.env
 
@@ -72,9 +73,9 @@ services:
             - 8080:80
         restart: always
         depends_on:
-            - php7.2
+            - php-fpm
             - mysql
 
 volumes:
-    # internal docker volume (note: to delete all volumes you need to execure this command: docker-compose down -v)
+    # internal docker volume (note: to delete all volumes you need to execute this command: docker-compose down -v)
     database:
